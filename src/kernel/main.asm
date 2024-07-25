@@ -1,7 +1,7 @@
-org 0x7C00 ; tells the assmebler where we expect our code to be loaded
-bits 16
+[org 0x7C00] ; tells the assmebler where we expect our code to be loaded
+[bits 16]
 
-%DEFINE ENDL 0x0D, 0x0A
+%DEFINE ENDL 0X0D, 0x0A
 
 start:
     JMP main
@@ -11,7 +11,7 @@ print:
     PUSH si
     PUSH ax
 
-    .loop:
+    .print_loop:
         LODSB
         OR al, al
         JZ .done
@@ -19,13 +19,39 @@ print:
         MOV ah, 0x0E    ; tty mode
         INT 0x10        ; bios video interrupt
 
-        JMP .loop
+        JMP .print_loop
 
     .done:
         POP ax
         POP si
-        ret
+        RET
 
+
+; take input from the user
+input:
+    PUSH ax
+    PUSH bx
+
+    MOV bx, si  ; point bx to the buffer (username)
+
+    .input_loop:
+        MOV ah, 0x00      ; Read Character
+        INT 0x16          ; interrupt for keyboard services
+        CMP al, 0x0D      ; compare al to (0x0D -> Enter key)
+        JE .done
+        MOV [bx], al      ; move (al) to the buffer
+
+        MOV si, bx        ; move (bx) to (si) to print the read character
+        CALL print
+
+        INC bx            ; increment (bx) to point to the next address in the buffer
+        JMP .input_loop
+
+    .done:
+        MOV BYTE [bx], 0 ; null-terminator
+        POP bx
+        POP ax
+        RET
 
 main:
 
@@ -40,12 +66,18 @@ main:
 
 
     ; write text to the screen in tty mode
-    MOV si, msg
+    MOV si, welcome_msg
     CALL print
 
-    MOV si, msg2
+    ; take username from the user
+    MOV si, username
+    CALL input
+
+    MOV si, new_line_string
     CALL print
 
+    MOV si, done_msg
+    CALL print
 
     HLT ; stops cpu from executing
 
@@ -56,8 +88,10 @@ main:
 ; it will go to .halt label which will make an infinity loop and jmp to itself ever and ever again
 
 
-msg: DB 'Hello World!', ENDL, 0
-msg2: DB 'Hello my name is ziad', ENDL, 0
+welcome_msg: DB 'Hi hacker :) what is your name: ', 0
+done_msg: DB 'DONE!', ENDL, 0
+new_line_string: DB '', ENDL, 0
+username: TIMES 10 db 0
 
 
 TIMES 510 - ($ - $$) db 0 ; $  means the beginning of the current (line)
