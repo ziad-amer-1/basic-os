@@ -1,8 +1,7 @@
 [ORG 0x7C00] ; tells the assmebler where we expect our code to be loaded
 [BITS 16]
 
-%DEFINE ENDL 0X0D, 0x0A
-
+%define ENDL 0x0D, 0x0A
 
 ;
 ; FAT12 header
@@ -11,28 +10,27 @@
 JMP SHORT start
 NOP
 
-bdb_oem:                    DB      'MSWIN4.1'           ; 8 bytes
-bdb_bytes_per_sector:       DW      512
-bdb_sectors_per_cluster:    DD      1
-bdb_reserved_sectors:       DW      1
-bdb_fat_count:              DB      2
-bdb_dir_entries_count:      DW      0E0h
-bdb_total_sectors:          DW      2880                 ; 2880 * 512 = 1.44MB
-bdb_media_descriptor_type:  DB      0F0h                 ; F0 = 3.5" floppy disk
-bdb_sectors_per_fat:        DW      9                    ; 9 sectors/fat
-bdb_sectors_per_track:      DW      18
-bdb_heads:                  DW      2
-bdb_hidden_sectors:         DD      0
-bdb_large_sector_count:     DD      0
+bdb_oem:                    DB 'MSWIN4.1'           ; 8 bytes
+bdb_bytes_per_sector:       DW 512
+bdb_sectors_per_cluster:    DB 1
+bdb_reserved_sectors:       DW 1
+bdb_fat_count:              DB 2
+bdb_dir_entries_count:      DW 0E0h
+bdb_total_sectors:          DW 2880                 ; 2880 * 512 = 1.44MB
+bdb_media_descriptor_type:  DB 0F0h                 ; F0 = 3.5" floppy disk
+bdb_sectors_per_fat:        DW 9                    ; 9 sectors/fat
+bdb_sectors_per_track:      DW 18
+bdb_heads:                  DW 2
+bdb_hidden_sectors:         DD 0
+bdb_large_sector_count:     DD 0
 
 ; extended boot record
-ebr_drive_number:           DB      0                    ; 0x00 floppy, 0x80 hdd, useless
-                            DB      0                    ; reserved
-ebr_signature:              DB      29h
-ebr_volume_id:              DB      12h, 34h, 56h, 78h   ; serial number, value doesn't matter
-ebr_volume_label:           DB      'ZIOS'        ; 11 bytes, padded with spaces
-ebr_system_id:              DB      'FAT12   '           ; 8 bytes
-
+ebr_drive_number:           DB 0                    ; 0x00 floppy, 0x80 hdd, useless
+                            DB 0                    ; reserved
+ebr_signature:              DB 29h
+ebr_volume_id:              DB 12h, 34h, 56h, 78h   ; serial number, value doesn't matter
+ebr_volume_label:           DB 'ZIOS'        ; 11 bytes, padded with spaces
+ebr_system_id:              DB 'FAT12   '           ; 8 bytes
 
 start:
     JMP main
