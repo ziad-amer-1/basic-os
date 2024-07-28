@@ -32,6 +32,42 @@ ebr_volume_id:              DB 12h, 34h, 56h, 78h   ; serial number, value doesn
 ebr_volume_label:           DB 'ZIOS'        ; 11 bytes, padded with spaces
 ebr_system_id:              DB 'FAT12   '           ; 8 bytes
 
+
+; Convert LBA address to CHS address
+; for clarifications: http://www.osdever.net/tutorials/view/lba-to-chs
+
+; Parameters:
+;   - ax: LBA address
+; Returns:
+;   - cx [bits 0-5]: sector number
+;   - cx [bits 6-15]: cylinder
+;   - dh: head
+;
+
+lba_to_chs:
+
+    PUSH ax
+    PUSH dx
+
+    XOR dx, dx                          ; clear dx (because it contains the remainder of DIV operation)
+    DIV WORD [bdb_sectors_per_track]    ; ax = LBA / bdb_sectors_per_track (dx will contain the remainder)
+    INC dx                              ; (the remainder of the last operation + 1) = sector
+    MOV cx, dx                          ; cx = sector
+
+    XOR dx, dx
+    DIV WORD [bdb_heads]                ; ax (LBA / bdb_sectors_per_track)  /  heads  =  cylinder
+                                        ; the remainder is stored in (dl) and it's the head number
+    MOV dh, dl                          ; dh = dl (head)  ->  dh = head
+    MOV ch, al                          ; ch = cylinder (lower 8 bits)
+    SHL ah, 6
+    OR  cl, ah                          ; put upper 2 bits of cylinder in CL
+
+    POP ax
+    MOV dl, al                          ; restore DL
+    POP ax
+    RET
+
+
 start:
     JMP main
 
