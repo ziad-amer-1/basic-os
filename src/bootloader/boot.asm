@@ -33,40 +33,6 @@ ebr_volume_label:           DB 'ZIOS'        ; 11 bytes, padded with spaces
 ebr_system_id:              DB 'FAT12   '           ; 8 bytes
 
 
-; Convert LBA address to CHS address
-; for clarifications: http://www.osdever.net/tutorials/view/lba-to-chs
-
-; Parameters:
-;   - ax: LBA address
-; Returns:
-;   - cx [bits 0-5]: sector number
-;   - cx [bits 6-15]: cylinder
-;   - dh: head
-;
-
-lba_to_chs:
-
-    PUSH ax
-    PUSH dx
-
-    XOR dx, dx                          ; clear dx (because it contains the remainder of DIV operation)
-    DIV WORD [bdb_sectors_per_track]    ; ax = LBA / bdb_sectors_per_track (dx will contain the remainder)
-    INC dx                              ; (the remainder of the last operation + 1) = sector
-    MOV cx, dx                          ; cx = sector
-
-    XOR dx, dx
-    DIV WORD [bdb_heads]                ; ax (LBA / bdb_sectors_per_track)  /  heads  =  cylinder
-                                        ; the remainder is stored in (dl) and it's the head number
-    MOV dh, dl                          ; dh = dl (head)  ->  dh = head
-    MOV ch, al                          ; ch = cylinder (lower 8 bits)
-    SHL ah, 6
-    OR  cl, ah                          ; put upper 2 bits of cylinder in CL
-
-    POP ax
-    MOV dl, al                          ; restore DL
-    POP ax
-    RET
-
 
 start:
     JMP main
@@ -104,9 +70,9 @@ input:
         INT 0x16          ; interrupt for keyboard services
         CMP al, 0x0D      ; compare al to (0x0D -> Enter key)
         JE .done
-        MOV [bx], al      ; move (al) to the buffer
+        MOV [bx], al      ; MOVe (al) to the buffer
 
-        MOV si, bx        ; move (bx) to (si) to print the read character
+        MOV si, bx        ; MOVe (bx) to (si) to print the read character
         CALL print
 
         INC bx            ; increment (bx) to point to the next address in the buffer
@@ -118,6 +84,23 @@ input:
         POP ax
         RET
 
+
+
+;
+; Error handlers
+;
+
+floppy_error:
+    mov si, msg_read_failed
+    call print
+    jmp wait_key_and_reboot
+
+wait_key_and_reboot:
+    mov ah, 0
+    int 16h                     ; wait for keypress
+    jmp 0FFFFh:0                ; jump to beginning of BIOS, should reboot
+
+
 main:
 
     ; setup data segments
@@ -128,6 +111,17 @@ main:
     ; setup stack
     MOV ss, ax
     MOV sp, 0x7C00  ; stack grows downwards from where we are loaded in memory
+
+
+    ; read something from floppy disk
+    ; BIOS should set DL to drive number
+    mov [ebr_drive_number], dl
+
+    mov ax, 1                   ; LBA=1, second sector from disk
+    mov cl, 1                   ; 1 sector to read
+    mov bx, 0x7E00              ; data should be after the bootloader
+    call disk_read
+
 
 
     ; write text to the screen in tty mode
@@ -153,10 +147,117 @@ main:
 ; it will go to .halt label which will make an infinity loop and jmp to itself ever and ever again
 
 
+
+
+
+; Parameters:
+;   - ax: LBA address
+; Returns:
+;   - cx [bits 0-5]: sector number
+;   - cx [bits 6-15]: cylinder
+;   - dh: head
+;
+
+lba_to_chs:
+
+    PUSH ax
+    PUSH dx
+
+    XOR dx, dx                          ; dx = 0
+    DIV word [bdb_sectors_per_track]    ; ax = LBA / SectorsPerTrack
+                                        ; dx = LBA % SectorsPerTrack
+
+    INC dx                              ; dx = (LBA % SectorsPerTrack + 1) = sector
+    MOV cx, dx                          ; cx = sector
+
+    XOR dx, dx                          ; dx = 0
+    DIV word [bdb_heads]                ; ax = (LBA / SectorsPerTrack) / Heads = cylinder
+                                        ; dx = (LBA / SectorsPerTrack) % Heads = head
+    MOV dh, dl                          ; dh = head
+    MOV ch, al                          ; ch = cylinder (lower 8 bits)
+    SHL ah, 6
+    OR  cl, ah                           ; put upper 2 bits of cylinder in CL
+
+    POP ax
+    MOV dl, al                          ; restore DL
+    POP ax
+    RET
+
+
+;
+; Reads sectors from a disk
+; Parameters:
+;   - ax: LBA address
+;   - cl: number of sectors to read (up to 128)
+;   - dl: drive number
+;   - es:bx: memory address where to store read data
+;
+disk_read:
+
+    PUSH ax                             ; save registers we will modify
+    PUSH bx
+    PUSH cx
+    PUSH dx
+    PUSH di
+
+    PUSH cx                             ; temporarily save CL (number of sectors to read)
+    CALL lba_to_chs                     ; compute CHS
+    POP ax                              ; AL = number of sectors to read
+
+    MOV ah, 02h
+    MOV di, 3                           ; retry count
+
+.retry:
+    PUSHA                               ; save all registers, we don't know what bios modifies
+    STC                                 ; set carry flag, some BIOS'es don't set it
+    INT 13h                             ; carry flag cleared = success
+    JNC .done                           ; jump if carry not set
+
+    ; read failed
+    POPA
+    CALL disk_reset
+
+    DEC di
+    TEST di, di
+    JNZ .retry
+
+.fail:
+    ; all attempts are exhausted
+    JMP floppy_error
+
+.done:
+    POPA
+
+    POP di
+    POP dx
+    POP cx
+    POP bx
+    POP ax                             ; restore registers modified
+    RET
+
+
+;
+; Resets disk controller
+; Parameters:
+;   dl: drive number
+;
+disk_reset:
+    PUSHA
+    MOV ah, 0
+    STC
+    INT 13h
+    JC floppy_error
+    POPA
+    RET
+
+
+
 welcome_msg: DB 'Hi hacker :) what is your name: ', 0
 done_msg: DB 'DONE!', ENDL, 0
 new_line_string: DB '', ENDL, 0
 username: TIMES 10 db 0
+msg_read_failed:        db 'Read from disk failed!', ENDL, 0
+
 
 
 TIMES 510 - ($ - $$) db 0 ; $  means the beginning of the current (line)
