@@ -88,7 +88,7 @@ main:
 ; it will go to .halt label which will make an infinity loop and jmp to itself ever and ever again
 
 
-welcome_msg: DB 'Hi hacker :) what is your name: ', 0
+welcome_msg: DB 'Hi what is your name: ', 0
 done_msg: DB 'DONE!', ENDL, 0
 new_line_string: DB '', ENDL, 0
 username: TIMES 10 db 0

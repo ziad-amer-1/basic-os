@@ -252,7 +252,7 @@ disk_reset:
 
 
 
-welcome_msg: DB 'Hi hacker :) what is your name: ', 0
+welcome_msg: DB 'Hi what is your name: ', 0
 done_msg: DB 'DONE!', ENDL, 0
 new_line_string: DB '', ENDL, 0
 username: TIMES 10 db 0
